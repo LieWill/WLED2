@@ -9,7 +9,6 @@
 #include "console/console.h"
 #include "services/gap/ble_svc_gap.h"
 #include "services/gatt/ble_svc_gatt.h"
-#include "ble_spp_server.h"
 #include "driver/uart.h"
 #include "esp_log.h"
 
@@ -63,47 +62,39 @@ static void ble_spp_server_print_conn_desc(struct ble_gap_conn_desc *desc)
 /**
  * 启动BLE广播，设置广播参数和内容
  */
-static void
-ble_spp_server_advertise(void)
+static void ble_spp_server_advertise(void)
 {
     struct ble_gap_adv_params adv_params;
     struct ble_hs_adv_fields fields;
     const char *name;
     int rc;
-
     /**
      * 设置广播包内容，包括标志、发射功率、设备名、服务UUID等
      */
     memset(&fields, 0, sizeof fields);
-
     // 设置广播标志：可发现、仅BLE
     fields.flags = BLE_HS_ADV_F_DISC_GEN |
                    BLE_HS_ADV_F_BREDR_UNSUP;
-
     // 包含TX功率字段
     fields.tx_pwr_lvl_is_present = 1;
     fields.tx_pwr_lvl = BLE_HS_ADV_TX_PWR_LVL_AUTO;
-
     // 设置设备名称
     name = ble_svc_gap_device_name();
     fields.name = (uint8_t *)name;
     fields.name_len = strlen(name);
     fields.name_is_complete = 1;
-
     // 设置16位服务UUID
     fields.uuids16 = (ble_uuid16_t[]) {
         BLE_UUID16_INIT(BLE_SVC_SPP_UUID16)
     };
     fields.num_uuids16 = 1;
     fields.uuids16_is_complete = 1;
-
     // 应用广播字段
     rc = ble_gap_adv_set_fields(&fields);
     if (rc != 0) {
         MODLOG_DFLT(ERROR, "设置广播数据出错; rc=%d\n", rc);
         return;
     }
-
     // 启动广播
     memset(&adv_params, 0, sizeof adv_params);
     adv_params.conn_mode = BLE_GAP_CONN_MODE_UND;
@@ -119,12 +110,10 @@ ble_spp_server_advertise(void)
 /**
  * GAP事件回调，处理连接、断开、参数更新、订阅等事件
  */
-static int
-ble_spp_server_gap_event(struct ble_gap_event *event, void *arg)
+static int ble_spp_server_gap_event(struct ble_gap_event *event, void *arg)
 {
     struct ble_gap_conn_desc desc;
     int rc;
-
     switch (event->type) {
     case BLE_GAP_EVENT_LINK_ESTAB:
         // 新连接建立或连接失败
@@ -142,19 +131,15 @@ ble_spp_server_gap_event(struct ble_gap_event *event, void *arg)
             ble_spp_server_advertise();
         }
         return 0;
-
     case BLE_GAP_EVENT_DISCONNECT:
         // 连接断开
         MODLOG_DFLT(INFO, "断开连接; 原因=%d ", event->disconnect.reason);
         ble_spp_server_print_conn_desc(&event->disconnect.conn);
         MODLOG_DFLT(INFO, "\n");
-
         conn_handle_subs[event->disconnect.conn.conn_handle] = false;
-
         // 断开后恢复广播
         ble_spp_server_advertise();
         return 0;
-
     case BLE_GAP_EVENT_CONN_UPDATE:
         // 连接参数更新
         MODLOG_DFLT(INFO, "连接参数已更新; status=%d ",
@@ -164,14 +149,12 @@ ble_spp_server_gap_event(struct ble_gap_event *event, void *arg)
         ble_spp_server_print_conn_desc(&desc);
         MODLOG_DFLT(INFO, "\n");
         return 0;
-
     case BLE_GAP_EVENT_ADV_COMPLETE:
         // 广播完成后再次广播
         MODLOG_DFLT(INFO, "广播完成; reason=%d",
                     event->adv_complete.reason);
         ble_spp_server_advertise();
         return 0;
-
     case BLE_GAP_EVENT_MTU:
         // MTU更新事件
         MODLOG_DFLT(INFO, "MTU更新事件; conn_handle=%d cid=%d mtu=%d\n",
@@ -179,7 +162,6 @@ ble_spp_server_gap_event(struct ble_gap_event *event, void *arg)
                     event->mtu.channel_id,
                     event->mtu.value);
         return 0;
-
     case BLE_GAP_EVENT_SUBSCRIBE:
         // 客户端订阅通知
         MODLOG_DFLT(INFO, "订阅事件; conn_handle=%d attr_handle=%d "
@@ -193,7 +175,6 @@ ble_spp_server_gap_event(struct ble_gap_event *event, void *arg)
                     event->subscribe.cur_indicate);
         conn_handle_subs[event->subscribe.conn_handle] = true;
         return 0;
-
     default:
         return 0;
     }
@@ -258,7 +239,6 @@ static int  ble_svc_gatt_handler(uint16_t conn_handle, uint16_t attr_handle, str
     case BLE_GATT_ACCESS_OP_READ_CHR:
         MODLOG_DFLT(INFO, "读回调");
         break;
-
     case BLE_GATT_ACCESS_OP_WRITE_CHR:
         MODLOG_DFLT(INFO, "写事件收到数据,conn_handle = %x,attr_handle = %x", conn_handle, attr_handle);
         // 读取数据内容
@@ -267,11 +247,7 @@ static int  ble_svc_gatt_handler(uint16_t conn_handle, uint16_t attr_handle, str
         if(len > 5)
             break;
         os_mbuf_copydata(ctxt->om, 0, len, buf);
-        if(len == 1)
-        {
-            // 单字节命令，可自定义处理
-        }    
-        else
+        if(len != 1)
         {
             // 多字节数据，解析亮度
             rec.c[1] = buf[1];
@@ -282,7 +258,6 @@ static int  ble_svc_gatt_handler(uint16_t conn_handle, uint16_t attr_handle, str
             light = rec.data.i;
         }
         break;
-
     default:
         MODLOG_DFLT(INFO, "\n默认回调");
         break;
@@ -318,8 +293,7 @@ static const struct ble_gatt_svc_def new_ble_svc_gatt_defs[] = {
 /**
  * GATT服务注册回调，打印注册信息
  */
-static void
-gatt_svr_register_cb(struct ble_gatt_register_ctxt *ctxt, void *arg)
+static void gatt_svr_register_cb(struct ble_gatt_register_ctxt *ctxt, void *arg)
 {
     char buf[BLE_UUID_STR_LEN];
 
@@ -391,7 +365,6 @@ void ble_server_uart_task(void *pvParameters)
                     ntf = (uint8_t *)malloc(sizeof(uint8_t) * event.size);
                     memset(ntf, 0x00, event.size);
                     uart_read_bytes(UART_NUM_0, ntf, event.size, portMAX_DELAY);
-
                     for (int i = 0; i <= CONFIG_BT_NIMBLE_MAX_CONNECTIONS; i++) {
                         /* 检查客户端是否已订阅通知 */
                         if (conn_handle_subs[i]) {
@@ -406,7 +379,6 @@ void ble_server_uart_task(void *pvParameters)
                             }
                         }
                     }
-
                     free(ntf);
                 }
                 break;
@@ -447,7 +419,6 @@ static void ble_spp_uart_init(void)
 void init_ble()
 {
     int rc;
-
     // 初始化NVS（用于存储PHY校准数据）
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -455,56 +426,33 @@ void init_ble()
         ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(ret);
-
     // 初始化NimBLE协议栈
     ret = nimble_port_init();
     if (ret != ESP_OK) {
-        MODLOG_DFLT(ERROR, "Failed to init nimble %d \n", ret);
+        MODLOG_DFLT(ERROR, "初始化nimble失败，错误码：%d \n", ret);
         return;
     }
-
     // 初始化连接订阅数组
     for (int i = 0; i <= CONFIG_BT_NIMBLE_MAX_CONNECTIONS; i++) {
         conn_handle_subs[i] = false;
     }
-
     // 初始化UART驱动并启动任务
     ble_spp_uart_init();
-
     // 配置NimBLE主机参数
     ble_hs_cfg.reset_cb = ble_spp_server_on_reset;
     ble_hs_cfg.sync_cb = ble_spp_server_on_sync;
     ble_hs_cfg.gatts_register_cb = gatt_svr_register_cb;
     ble_hs_cfg.store_status_cb = ble_store_util_status_rr;
-
     ble_hs_cfg.sm_io_cap = CONFIG_EXAMPLE_IO_TYPE;
-#ifdef CONFIG_EXAMPLE_BONDING
-    ble_hs_cfg.sm_bonding = 1;
-#endif
-#ifdef CONFIG_EXAMPLE_MITM
-    ble_hs_cfg.sm_mitm = 1;
-#endif
-#ifdef CONFIG_EXAMPLE_USE_SC
-    ble_hs_cfg.sm_sc = 1;
-#else
     ble_hs_cfg.sm_sc = 0;
-#endif
-#ifdef CONFIG_EXAMPLE_BONDING
-    ble_hs_cfg.sm_our_key_dist = 1;
-    ble_hs_cfg.sm_their_key_dist = 1;
-#endif
-
     // 注册自定义GATT服务
     rc = gatt_svr_init();
     assert(rc == 0);
-
     // 设置默认设备名
     rc = ble_svc_gap_device_name_set("tetris game");
     assert(rc == 0);
-
     // 初始化存储
     ble_store_config_init();
-
     // 启动NimBLE主机任务
     nimble_port_freertos_init(ble_spp_server_host_task);
 }

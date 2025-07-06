@@ -158,42 +158,35 @@ public:
         fallDelay = 300;
     }
     // 游戏主循环
-    void run() {
-        auto lastFallTime = chrono::steady_clock::now();
-
-        while (!gameOver) {
-            // 处理输入
-            processInput();
-
-            // 更新游戏状态
-            auto now = chrono::steady_clock::now();
-            auto elapsed = chrono::duration_cast<chrono::milliseconds>(now - lastFallTime).count();
-
-            if (elapsed >= fallDelay) {
-                if (!moveCurrent(0, 1)) {
-                    // 无法继续下落，锁定方块
-                    lockCurrent();
-                    clearLines();
-
-                    // 创建新方块
-                    current = next;
-                    next.reset();
-
-                    // 检查游戏结束
-                    if (!isValidPosition(current.getX(), current.getY(), current.getShape())) {
-                        gameOver = true;
-                    }
+void run() {
+    auto lastFallTime = chrono::steady_clock::now();
+    while (!gameOver) {
+        // 处理输入
+        processInput();
+        // 更新游戏状态
+        auto now = chrono::steady_clock::now();
+        auto elapsed = chrono::duration_cast<chrono::milliseconds>(now - lastFallTime).count();
+        if (elapsed >= fallDelay) {
+            if (!moveCurrent(0, 1)) {
+                // 无法继续下落，锁定方块
+                lockCurrent();
+                clearLines();
+                // 创建新方块
+                current = next;
+                next.reset();
+                // 检查游戏结束
+                if (!isValidPosition(current.getX(), current.getY(), current.getShape())) {
+                    gameOver = true;
                 }
-                lastFallTime = now;
             }
-
-            // 渲染游戏
-            render();
-
-            // 控制游戏速度
-            std::this_thread::sleep_for(chrono::milliseconds(10));
+            lastFallTime = now;
         }
+        // 渲染游戏
+        render();
+        // 控制游戏速度
+        std::this_thread::sleep_for(chrono::milliseconds(10));
     }
+}
 
 private:
     // 处理输入缓冲区的按键
@@ -310,57 +303,46 @@ private:
         }
     }
     // 检查并消除已满的行，更新分数和等级
-    void clearLines() {
-        int linesClearedThisMove = 0;
-
-        for (int i = gridHeight - 1; i >= 0; i--) {
-            bool lineComplete = true;
-
-            for (int j = 0; j < gridWidth; j++) {
-                if (grid[i][j] == rgb(0, 0, 0)) { // 检查是否有空格
-                    lineComplete = false;
-                    break;
-                }
-            }
-
-            if (lineComplete) {
-                // 移除该行
-                for (int k = i; k > 0; k--) {
-                    grid[k] = grid[k - 1];
-                }
-
-                // 顶部行设为空
-                grid[0] = vector<rgb>(gridWidth, rgb(0, 0, 0));
-
-                // 增加计数器
-                linesClearedThisMove++;
-                i++; // 重新检查当前行
+void clearLines() {
+    int linesClearedThisMove = 0;
+    for (int i = gridHeight - 1; i >= 0; i--) {
+        bool lineComplete = true;
+        for (int j = 0; j < gridWidth; j++) {
+            if (grid[i][j] == rgb(0, 0, 0)) { // 检查是否有空格
+                lineComplete = false;
+                break;
             }
         }
-
-        // 更新分数
-        if (linesClearedThisMove > 0) {
-            // 消行得分：1行=100，2行=300，3行=500，4行=800
-            const int points[5] = { 0, 100, 300, 500, 800 };
-            score += points[linesClearedThisMove] * level;
-
-            linesCleared += linesClearedThisMove;
-
-            // 每消10行升一级
-            level = linesCleared / 10 + 1;
-
-            // 提高下落速度
-            fallDelay = 500 - (level - 1) * 40;
-            if (fallDelay < 100) fallDelay = 100;
-            ESP_LOGI("分数","%d", score);
+        if (lineComplete) {
+            // 移除该行
+            for (int k = i; k > 0; k--) {
+                grid[k] = grid[k - 1];
+            }
+            // 顶部行设为空
+            grid[0] = vector<rgb>(gridWidth, rgb(0, 0, 0));
+            // 增加计数器
+            linesClearedThisMove++;
+            i++; // 重新检查当前行
         }
     }
+    // 更新分数
+    if (linesClearedThisMove > 0) {
+        // 消行得分：1行=100，2行=300，3行=500，4行=800
+        const int points[5] = { 0, 100, 300, 500, 800 };
+        score += points[linesClearedThisMove] * level;
+        linesCleared += linesClearedThisMove;
+        // 每消10行升一级
+        level = linesCleared / 10 + 1;
+        // 提高下落速度
+        fallDelay = 500 - (level - 1) * 40;
+        if (fallDelay < 100) fallDelay = 100;
+        ESP_LOGI("分数","%d", score);
+    }
+}
     // 渲染当前游戏状态到屏幕
     void render() {
         // 更新显示缓冲区
-
         updateDisplayBuffer();
-
         // 打印显示缓冲区
         printDisplayBuffer();
     }

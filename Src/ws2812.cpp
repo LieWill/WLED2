@@ -18,3 +18,62 @@ uint8_t rgb::gamma_correction_[256] = {
         177, 180, 182, 184, 186, 189, 191, 193, 196, 198, 200, 203, 205, 208, 210, 213,
         215, 218, 220, 223, 225, 228, 231, 233, 236, 239, 241, 244, 247, 249, 252, 255
     };
+
+
+esp_err_t WS2812::init()
+{
+        // RMT 发送配置
+        rmt_tx_channel_config_t tx_config = {
+            .gpio_num = _pin,
+            .clk_src = RMT_CLK_SRC_DEFAULT,
+            .resolution_hz = 10 * 1000 * 1000, // 10MHz, 0.1us/tick
+            .mem_block_symbols = 64,
+            .trans_queue_depth = 4,
+            .intr_priority = 0,  // 添加缺失的字段
+            .flags = {
+                .invert_out = false,
+                .with_dma = false,
+                .io_loop_back = false,
+                .io_od_mode = false,
+                .allow_pd = false   // 添加缺失的字段
+            }
+        };
+        // 创建 RMT 通道
+        ESP_RETURN_ON_ERROR(rmt_new_tx_channel(&tx_config, &_channel), "WS2812", "创建RMT通道失败");
+        // 创建编码器
+        rmt_bytes_encoder_config_t bytes__encoderconfig = {
+            .bit0 = {
+                .duration0 = 4, // T0H 0.4us (4 ticks)
+                .level0 = 1,
+                .duration1 = 8, // T0L 0.8us (8 ticks)
+                .level1 = 0,
+            },
+            .bit1 = {
+                .duration0 = 8, // T1H 0.8us (8 ticks)
+                .level0 = 1,
+                .duration1 = 4, // T1L 0.4us (4 ticks)
+                .level1 = 0,
+            },
+            .flags = {
+                .msb_first = 1  // WS2812 使用 MSB 优先
+            }
+        };
+        ESP_RETURN_ON_ERROR(rmt_new_bytes_encoder(&bytes__encoderconfig, &_encoder), "WS2812", "创建编码器失败");
+        // 启用通道
+        return rmt_enable(_channel);
+}
+
+esp_err_t WS2812::show(std::vector<rgb> &color)
+{
+        if (!_channel || !_encoder) return ESP_ERR_INVALID_STATE;
+        // 准备传输配置
+        rmt_transmit_config_t transmit_config = {
+            .loop_count = 0, // 不循环
+            .flags = {
+                .eot_level = 0, // 结束后保持低电平
+                .queue_nonblocking = false  // 添加缺失的字段
+            }
+        };
+        return rmt_transmit(_channel, _encoder, color.data(), color.size()*3, &transmit_config);
+}
+
